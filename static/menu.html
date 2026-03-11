@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AG Lab — Algoritmos Genéticos</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg:       #08080d;
+    --surface:  #0e0e16;
+    --card:     #13131e;
+    --border:   #1e1e30;
+    --text:     #e8e8f8;
+    --muted:    #5a5a7a;
+
+    --c1:       #00e5ff;   /* mochila — cyan */
+    --c2:       #39ff14;   /* sensores — verde */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID BG ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── GLOW ORBS ── */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none; z-index: 0;
+    opacity: 0.12;
+  }
+  .orb-1 { width: 500px; height: 500px; background: var(--c1); top: -120px; left: -120px; }
+  .orb-2 { width: 500px; height: 500px; background: var(--c2); bottom: -120px; right: -120px; }
+
+  /* ── LAYOUT ── */
+  .wrapper {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 960px;
+    display: flex; flex-direction: column; align-items: center; gap: 64px;
+  }
+
+  /* ── HEADER ── */
+  .header { text-align: center; }
+
+  .header .eyebrow {
+    font-size: 10px; letter-spacing: 5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 18px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+  }
+  .header .eyebrow::before,
+  .header .eyebrow::after {
+    content: ''; display: block; width: 40px; height: 1px; background: var(--border);
+  }
+
+  .header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(36px, 7vw, 72px);
+    font-weight: 800; line-height: 1;
+    letter-spacing: -2px;
+  }
+  .header h1 .word-ag {
+    background: linear-gradient(90deg, var(--c1), var(--c2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+
+  .header .subtitle {
+    margin-top: 18px; color: var(--muted); font-size: 13px; line-height: 1.8;
+    max-width: 480px; margin-left: auto; margin-right: auto;
+  }
+
+  /* ── VERSION BADGE ── */
+  .version-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 6px 16px; font-size: 10px;
+    letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+    margin-top: 20px;
+  }
+  .version-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c2); box-shadow: 0 0 6px var(--c2); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+  /* ── CARDS ── */
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    width: 100%;
+  }
+
+  .ag-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 36px 32px;
+    text-decoration: none;
+    color: inherit;
+    display: flex; flex-direction: column; gap: 24px;
+    position: relative; overflow: hidden;
+    transition: transform 0.3s cubic-bezier(.2,.8,.2,1), border-color 0.3s, box-shadow 0.3s;
+    cursor: pointer;
+  }
+
+  /* Top accent line */
+  .ag-card::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: var(--card-color);
+    opacity: 0.6; transition: opacity 0.3s;
+  }
+
+  /* Glow on hover */
+  .ag-card::after {
+    content: ''; position: absolute; inset: 0; border-radius: 20px;
+    background: radial-gradient(circle at 50% 0%, var(--card-color), transparent 60%);
+    opacity: 0; transition: opacity 0.4s;
+  }
+
+  .ag-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--card-color);
+    box-shadow: 0 20px 60px -10px color-mix(in srgb, var(--card-color) 30%, transparent);
+  }
+  .ag-card:hover::before { opacity: 1; }
+  .ag-card:hover::after  { opacity: 0.06; }
+
+  .ag-card-1 { --card-color: var(--c1); }
+  .ag-card-2 { --card-color: var(--c2); }
+
+  /* Card inner */
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+
+  .card-icon {
+    width: 56px; height: 56px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    background: color-mix(in srgb, var(--card-color) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--card-color) 25%, transparent);
+    flex-shrink: 0;
+  }
+
+  .card-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: var(--card-color); opacity: 0.7;
+  }
+
+  .card-body { flex: 1; }
+
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px; font-weight: 800; line-height: 1.2;
+    margin-bottom: 10px; color: var(--text);
+  }
+
+  .card-desc { font-size: 12px; color: var(--muted); line-height: 1.8; }
+
+  /* Tags */
+  .card-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 6px;
+    background: color-mix(in srgb, var(--card-color) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--card-color) 20%, transparent);
+    color: var(--card-color);
+  }
+
+  /* Stats row */
+  .card-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--border);
+    padding-top: 20px; gap: 16px;
+  }
+  .card-stat { text-align: center; }
+  .card-stat .cs-val {
+    font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800;
+    color: var(--card-color);
+  }
+  .card-stat .cs-label { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+
+  /* CTA */
+  .card-cta {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--border); padding-top: 20px;
+  }
+  .cta-text { font-size: 12px; color: var(--card-color); font-weight: 700; letter-spacing: 1px; }
+  .cta-arrow {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: color-mix(in srgb, var(--card-color) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--card-color) 30%, transparent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--card-color);
+    transition: transform 0.2s;
+  }
+  .ag-card:hover .cta-arrow { transform: translateX(4px); }
+
+  /* ── TECH STACK BAR ── */
+  .tech-bar {
+    width: 100%;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 20px; flex-wrap: wrap;
+  }
+  .tech-label { font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); }
+  .tech-items { display: flex; gap: 10px; flex-wrap: wrap; }
+  .tech-item {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 14px; font-size: 11px; font-weight: 700;
+  }
+  .tech-item .ti-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center; font-size: 10px;
+    letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+    position: relative; z-index: 1;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .cards { grid-template-columns: 1fr; }
+    .ag-card { padding: 28px 24px; }
+    .card-stats { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="eyebrow">Inteligencia Artificial</div>
+    <h1><span class="word-ag">AG</span> Lab</h1>
+    <p class="subtitle">
+      Plataforma de Algoritmos Genéticos.<br>
+      Selecciona un problema para visualizar su evolución.
+    </p>
+    <div class="version-badge">
+      <span class="dot"></span>
+      2 algoritmos disponibles
+    </div>
+  </div>
+
+  <!-- CARDS -->
+  <div class="cards">
+
+    <!-- MOCHILA -->
+    <a class="ag-card ag-card-1" href="index.html">
+      <div class="card-top">
+        <div class="card-icon">🎒</div>
+        <div class="card-num">Problema 01</div>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Problema de la Mochila</div>
+        <div class="card-desc">
+          Selecciona objetos para maximizar la ganancia sin exceder la capacidad máxima de 15 kg.
+          Representación binaria con 5 genes (5 = incluido, 7 = excluido).
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">Optimización</span>
+        <span class="tag">Binario</span>
+        <span class="tag">Restricción de peso</span>
+      </div>
+      <div class="card-stats">
+        <div class="card-stat"><div class="cs-val">5</div><div class="cs-label">Objetos</div></div>
+        <div class="card-stat"><div class="cs-val">32</div><div class="cs-label">Soluciones</div></div>
+        <div class="card-stat"><div class="cs-val">15kg</div><div class="cs-label">Capacidad</div></div>
+      </div>
+      <div class="card-cta">
+        <span class="cta-text">Abrir algoritmo →</span>
+        <div class="cta-arrow">→</div>
+      </div>
+    </a>
+
+    <!-- SENSORES -->
+    <a class="ag-card ag-card-2" href="sensores.html">
+      <div class="card-top">
+        <div class="card-icon">📡</div>
+        <div class="card-num">Problema 02</div>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Sensores de Calidad del Aire</div>
+        <div class="card-desc">
+          Ubica 4 sensores en 10 localizaciones posibles para maximizar la cobertura ambiental.
+          Penalización activa si el número de sensores no es exactamente 4.
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">Cobertura</span>
+        <span class="tag">Penalización</span>
+        <span class="tag">Ubicación óptima</span>
+      </div>
+      <div class="card-stats">
+        <div class="card-stat"><div class="cs-val">10</div><div class="cs-label">Ubicaciones</div></div>
+        <div class="card-stat"><div class="cs-val">210</div><div class="cs-label">Soluciones</div></div>
+        <div class="card-stat"><div class="cs-val">36</div><div class="cs-label">Cob. máx.</div></div>
+      </div>
+      <div class="card-cta">
+        <span class="cta-text">Abrir algoritmo →</span>
+        <div class="cta-arrow">→</div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- TECH STACK -->
+  <div class="tech-bar">
+    <span class="tech-label">Stack técnico</span>
+    <div class="tech-items">
+      <div class="tech-item"><span class="ti-dot" style="background:#3776ab"></span>Python 3.11</div>
+      <div class="tech-item"><span class="ti-dot" style="background:#009688"></span>FastAPI</div>
+      <div class="tech-item"><span class="ti-dot" style="background:#e44d26"></span>HTML5</div>
+      <div class="tech-item"><span class="ti-dot" style="background:#f7df1e"></span>JavaScript</div>
+      <div class="tech-item"><span class="ti-dot" style="background:#6c47ff"></span>Canvas API</div>
+    </div>
+  </div>
+
+  <footer>AG Lab &nbsp;·&nbsp; Inteligencia Artificial &nbsp;·&nbsp; 2025</footer>
+
+</div>
+</body>
+</html>

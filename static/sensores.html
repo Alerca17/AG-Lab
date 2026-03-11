@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AG Sensores — Calidad del Aire</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  :root {
+    --bg: #0a0f0a;
+    --surface: #0e140e;
+    --card: #141f14;
+    --border: #1e301e;
+    --accent: #39ff14;
+    --cyan: #00e5ff;
+    --orange: #ff6b35;
+    --purple: #b388ff;
+    --red: #ff4757;
+    --yellow: #ffd32a;
+    --text: #e0f0e0;
+    --muted: #5a7a5a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(57,255,20,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(57,255,20,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; position: relative; z-index: 1; }
+
+  /* HEADER */
+  header { text-align: center; margin-bottom: 48px; }
+  header .label { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(26px, 5vw, 48px); font-weight: 800;
+    background: linear-gradient(135deg, var(--text) 30%, var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    line-height: 1.1;
+  }
+  header p { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+  /* API STATUS */
+  .api-status {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px; margin-bottom: 28px; font-size: 12px;
+  }
+  .api-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); transition: background 0.3s; }
+  .api-dot.connected { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .api-dot.error     { background: var(--red);    box-shadow: 0 0 8px var(--red); }
+  .api-url-input {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; color: var(--accent); font-family: 'Space Mono', monospace;
+    font-size: 12px; outline: none; width: 260px;
+  }
+  .api-url-input:focus { border-color: var(--accent); }
+  .btn-ping {
+    font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; border: none;
+    background: var(--border); color: var(--text); transition: all 0.2s;
+  }
+  .btn-ping:hover { background: var(--accent); color: #000; }
+
+  /* MAPA DE UBICACIONES */
+  .map-section { margin-bottom: 32px; }
+  .section-title {
+    font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+    letter-spacing: 3px; text-transform: uppercase; color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .ubicaciones-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
+  }
+
+  .ubic-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 12px; text-align: center; position: relative; overflow: hidden;
+    transition: border-color 0.3s, transform 0.2s, box-shadow 0.3s;
+    cursor: default;
+  }
+  .ubic-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 2px; background: var(--muted); transition: background 0.3s;
+  }
+  .ubic-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(57,255,20,0.15);
+    transform: translateY(-2px);
+  }
+  .ubic-card.selected::before { background: var(--accent); }
+
+  .ubic-id { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 800; color: var(--muted); margin-bottom: 4px; }
+  .ubic-name { font-size: 10px; color: var(--text); line-height: 1.4; margin-bottom: 6px; font-weight: 700; }
+  .ubic-cob {
+    font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800;
+    transition: color 0.3s;
+  }
+  .ubic-zona {
+    font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); margin-top: 4px;
+  }
+  .ubic-badge {
+    position: absolute; top: 6px; right: 6px;
+    background: var(--accent); color: #000;
+    font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 10px;
+    display: none;
+  }
+  .ubic-card.selected .ubic-badge { display: block; }
+
+  /* Colores por cobertura */
+  .cob-high   { color: var(--accent); }
+  .cob-mid    { color: var(--yellow); }
+  .cob-low    { color: var(--orange); }
+
+  /* FORMULA */
+  .formula-box {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 24px; margin-bottom: 28px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  }
+  .formula-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .formula-text {
+    font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 800; color: var(--accent);
+  }
+  .formula-note { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.6; }
+
+  /* CONFIG */
+  .config-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; }
+  .config-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .config-card label { display: block; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .config-card input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; color: var(--accent); font-family: 'Space Mono', monospace;
+    font-size: 14px; font-weight: 700; outline: none; transition: border-color 0.2s;
+  }
+  .config-card input:focus { border-color: var(--accent); }
+
+  /* MODE + CONTROLS */
+  .mode-toggle { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+  .mode-toggle span { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
+  .btn-mode {
+    font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); transition: all 0.2s; letter-spacing: 1px;
+  }
+  .btn-mode.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+  .controls { display: flex; gap: 12px; margin-bottom: 36px; flex-wrap: wrap; }
+  .btn {
+    font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase; padding: 12px 24px;
+    border-radius: 8px; cursor: pointer; border: none; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(57,255,20,0.3); }
+  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+  /* PROGRESS */
+  .progress-bar { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 32px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--cyan)); border-radius: 2px; transition: width 0.3s; width: 0%; }
+
+  /* STATS */
+  .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 32px; }
+  .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+  .stat-box .stat-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .stat-box .stat-val { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; }
+  .stat-box.green  .stat-val { color: var(--accent); }
+  .stat-box.cyan   .stat-val { color: var(--cyan); }
+  .stat-box.orange .stat-val { color: var(--orange); }
+  .stat-box.purple .stat-val { color: var(--purple); }
+
+  /* SOLUTION BOX */
+  .solution-box {
+    background: linear-gradient(135deg, rgba(57,255,20,0.07), rgba(0,229,255,0.04));
+    border: 1px solid rgba(57,255,20,0.35); border-radius: 12px; padding: 24px;
+    margin-bottom: 28px; display: none;
+  }
+  .solution-box.show { display: block; }
+  .solution-box h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--accent); margin-bottom: 18px; }
+  .sol-sensors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .sol-sensor {
+    background: rgba(57,255,20,0.07); border: 1px solid rgba(57,255,20,0.25);
+    border-radius: 10px; padding: 14px; text-align: center;
+  }
+  .sol-sensor .ss-id   { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+  .sol-sensor .ss-name { font-size: 12px; color: var(--text); font-weight: 700; margin-bottom: 6px; line-height: 1.3; }
+  .sol-sensor .ss-cob  { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--accent); }
+  .sol-sensor .ss-zona { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-top: 4px; }
+  .sol-stats { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 12px; }
+  .sol-stat { font-size: 13px; }
+  .sol-stat span { color: var(--accent); font-weight: 700; }
+
+  /* GEN PANEL */
+  .gen-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+  .gen-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .gen-badge { background: var(--accent); color: #000; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 20px; }
+  .gen-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 600; color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 8px; border-bottom: 1px solid rgba(30,48,30,0.5); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(57,255,20,0.03); }
+  .best-row td { background: rgba(57,255,20,0.05) !important; }
+
+  .chromo { display: inline-flex; gap: 2px; }
+  .gene { width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
+  .gene-1 { background: rgba(57,255,20,0.2); color: var(--accent); border: 1px solid rgba(57,255,20,0.5); }
+  .gene-0 { background: rgba(90,122,90,0.1); color: var(--muted); border: 1px solid rgba(90,122,90,0.2); }
+
+  .badge-valid   { background: rgba(57,255,20,0.15); color: var(--accent); border: 1px solid rgba(57,255,20,0.3); padding: 2px 7px; border-radius: 4px; font-size: 9px; }
+  .badge-invalid { background: rgba(255,71,87,0.15); color: var(--red); border: 1px solid rgba(255,71,87,0.3); padding: 2px 7px; border-radius: 4px; font-size: 9px; }
+
+  .ubicaciones-mini { font-size: 10px; color: var(--muted); max-width: 200px; line-height: 1.5; }
+
+  /* CHART */
+  .chart-area { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+  .chart-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 16px; letter-spacing: 1px; text-transform: uppercase; }
+  canvas#fitnessChart { width: 100%; height: 180px; }
+
+  /* LOG */
+  .log-area { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; max-height: 180px; overflow-y: auto; font-size: 11px; line-height: 1.9; }
+  .log-line { color: var(--muted); }
+  .log-gen  { color: var(--cyan); }
+  .log-best { color: var(--accent); }
+  .log-err  { color: var(--red); }
+
+  /* LOADING */
+  .loading-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(10,15,10,0.88); z-index: 100;
+    align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+  }
+  .loading-overlay.show { display: flex; }
+  .spinner { width: 48px; height: 48px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--accent); animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--accent); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+  @media (max-width: 768px) {
+    .ubicaciones-grid { grid-template-columns: repeat(3, 1fr); }
+    .config-row { grid-template-columns: repeat(2, 1fr); }
+    .stats-bar  { grid-template-columns: repeat(2, 1fr); }
+    .sol-sensors { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Optimizando ubicaciones...</div>
+</div>
+
+<div class="container">
+  <a href="menu.html" style="display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;letter-spacing:2px;text-transform:uppercase;text-decoration:none;margin-bottom:32px;border:1px solid var(--border);padding:8px 16px;border-radius:8px;transition:all 0.2s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">← Menú Principal</a>
+
+  <header>
+    <div class="label">Inteligencia Artificial · Algoritmos Genéticos</div>
+    <h1>Sensores de Calidad del Aire</h1>
+    <p>10 ubicaciones disponibles · Presupuesto para <strong style="color:var(--accent)">4 sensores</strong> · Maximizar cobertura ambiental</p>
+  </header>
+
+  <!-- API STATUS -->
+  <div class="api-status">
+    <div class="api-dot" id="apiDot"></div>
+    <span style="color:var(--muted);font-size:11px;letter-spacing:1px">API URL:</span>
+    <input class="api-url-input" id="apiUrl" value="" placeholder="Auto (mismo dominio)">
+    <button class="btn-ping" onclick="pingAPI()">Conectar</button>
+    <span id="apiStatusText" style="color:var(--muted);font-size:11px;margin-left:4px">Sin conectar</span>
+  </div>
+
+  <!-- UBICACIONES -->
+  <div class="map-section">
+    <div class="section-title">Ubicaciones Disponibles</div>
+    <div class="ubicaciones-grid" id="ubicacionesGrid">
+      <!-- cargado desde backend -->
+      <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--muted);font-size:12px">
+        Conecta al backend para cargar las ubicaciones
+      </div>
+    </div>
+  </div>
+
+  <!-- FÓRMULA -->
+  <div class="formula-box">
+    <div>
+      <div class="formula-label">Función de Fitness</div>
+      <div class="formula-text">f(x) = Σ cobertura<sub>i</sub> − 20 × |sensores − 4|</div>
+    </div>
+    <div style="width:1px;height:48px;background:var(--border)"></div>
+    <div>
+      <div class="formula-label">Penalización activa</div>
+      <div class="formula-text" id="penFormula" style="color:var(--orange)">−20 × Δ</div>
+    </div>
+    <div style="width:1px;height:48px;background:var(--border)"></div>
+    <div>
+      <div class="formula-label">Cobertura máxima posible</div>
+      <div class="formula-text" id="maxCobDisplay" style="color:var(--yellow)">—</div>
+      <div class="formula-note">Suma de los 4 mejores valores</div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="config-row">
+    <div class="config-card"><label>Tamaño población</label><input type="number" id="popSize" value="10" min="4" max="100"></div>
+    <div class="config-card"><label>Prob. cruce</label><input type="number" id="pCross" value="0.86" min="0.1" max="1" step="0.05"></div>
+    <div class="config-card"><label>Prob. mutación</label><input type="number" id="pMut" value="0.2" min="0" max="1" step="0.05"></div>
+    <div class="config-card"><label>Iteraciones máx.</label><input type="number" id="maxIter" value="100" min="1" max="1000"></div>
+    <div class="config-card">
+      <label>Penalización</label>
+      <input type="number" id="penalizacion" value="20" min="1" max="100" oninput="updatePenFormula()">
+    </div>
+    <div class="config-card"><label>Velocidad paso (ms)</label><input type="number" id="speed" value="500" min="100" max="3000" step="100"></div>
+  </div>
+
+  <!-- MODE + CONTROLS -->
+  <div class="mode-toggle">
+    <span>Modo:</span>
+    <button class="btn-mode active" id="modeRun"  onclick="setMode('run')">▶ Completo</button>
+    <button class="btn-mode"        id="modeStep" onclick="setMode('step')">⏩ Paso a Paso</button>
+  </div>
+  <div class="controls">
+    <button class="btn btn-primary"   id="btnRun"  onclick="handleRun()">▶ Ejecutar AG</button>
+    <button class="btn btn-secondary" id="btnStep" onclick="handleStep()" disabled>Siguiente Gen</button>
+    <button class="btn btn-secondary"              onclick="resetAll()">↺ Reiniciar</button>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <!-- STATS -->
+  <div class="stats-bar">
+    <div class="stat-box cyan">  <div class="stat-label">Generación</div>       <div class="stat-val" id="statGen">0</div></div>
+    <div class="stat-box green"> <div class="stat-label">Mejor Cobertura</div>  <div class="stat-val" id="statBest">—</div></div>
+    <div class="stat-box orange"><div class="stat-label">Sensores Activos</div> <div class="stat-val" id="statSensores">—</div></div>
+    <div class="stat-box purple"><div class="stat-label">Promedio Fitness</div> <div class="stat-val" id="statAvg">—</div></div>
+  </div>
+
+  <!-- SOLUTION -->
+  <div class="solution-box" id="solutionBox">
+    <h3>✦ Mejor Ubicación de Sensores</h3>
+    <div class="sol-sensors" id="solSensors"></div>
+    <div class="sol-stats"   id="solStats"></div>
+  </div>
+
+  <!-- CHART -->
+  <div class="chart-area">
+    <div class="chart-title">Evolución del Fitness</div>
+    <canvas id="fitnessChart"></canvas>
+  </div>
+
+  <!-- GENERATIONS LOG -->
+  <div id="generationsLog"></div>
+
+  <!-- LOG -->
+  <div class="log-area" id="logArea"></div>
+
+</div><!-- /container -->
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────
+let mode = 'run';
+let stepState = null;
+let fitnessHistory = { best: [], avg: [] };
+let maxIterations = 100;
+let ubicacionesData = [];
+
+// ── HELPERS ───────────────────────────────────────────────────
+const apiUrl  = () => { const v = document.getElementById('apiUrl').value.replace(/\/$/, ''); return v || window.location.origin; };
+const getP    = id => parseFloat(document.getElementById(id).value);
+const getI    = id => parseInt(document.getElementById(id).value);
+
+function getParams() {
+  return {
+    pop_size:    getI('popSize'),
+    p_cross:     getP('pCross'),
+    p_mut:       getP('pMut'),
+    max_iter:    getI('maxIter'),
+    penalizacion: getI('penalizacion'),
+  };
+}
+
+function updatePenFormula() {
+  const p = getI('penalizacion');
+  document.getElementById('penFormula').textContent = `−${p} × Δ`;
+}
+
+// ── API ───────────────────────────────────────────────────────
+async function apiFetch(path, body = null) {
+  const opts = { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(apiUrl() + path, opts);
+  if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || `HTTP ${res.status}`); }
+  return res.json();
+}
+
+async function pingAPI() {
+  const dot = document.getElementById('apiDot'), text = document.getElementById('apiStatusText');
+  dot.className = 'api-dot'; text.textContent = 'Conectando...'; text.style.color = 'var(--muted)';
+  try {
+    await apiFetch('/api/health');
+    dot.className = 'api-dot connected';
+    text.textContent = '✓ Conectado'; text.style.color = 'var(--accent)';
+    log('Backend conectado en ' + apiUrl(), 'log-best');
+    loadUbicaciones();
+  } catch(e) {
+    dot.className = 'api-dot error';
+    text.textContent = '✗ ' + e.message; text.style.color = 'var(--red)';
+    log('Error al conectar: ' + e.message, 'log-err');
+  }
+}
+
+async function loadUbicaciones() {
+  try {
+    const data = await apiFetch('/sensores/ubicaciones');
+    ubicacionesData = data.ubicaciones;
+    renderUbicaciones(data.ubicaciones);
+    document.getElementById('maxCobDisplay').textContent =
+      data.cobertura_maxima_posible || calcMaxCob(data.ubicaciones) ;
+  } catch(e) { log('Error cargando ubicaciones: ' + e.message, 'log-err'); }
+}
+
+function calcMaxCob(ubs) {
+  return ubs.map(u => u.cobertura).sort((a,b) => b-a).slice(0,4).reduce((a,b)=>a+b,0);
+}
+
+// ── RENDER UBICACIONES ─────────────────────────────────────────
+function cobClass(c) { return c >= 8 ? 'cob-high' : c >= 6 ? 'cob-mid' : 'cob-low'; }
+
+function renderUbicaciones(ubs) {
+  document.getElementById('ubicacionesGrid').innerHTML = ubs.map(u => `
+    <div class="ubic-card" id="ubic-${u.id}" title="${u.descripcion}">
+      <span class="ubic-badge">✓</span>
+      <div class="ubic-id">UB-${String(u.id).padStart(2,'0')}</div>
+      <div class="ubic-name">${u.nombre}</div>
+      <div class="ubic-cob ${cobClass(u.cobertura)}">${u.cobertura}</div>
+      <div class="ubic-zona">${u.zona}</div>
+    </div>`).join('');
+}
+
+function highlightSolution(selectedIds) {
+  // Reset all
+  document.querySelectorAll('.ubic-card').forEach(c => c.classList.remove('selected'));
+  // Highlight selected
+  selectedIds.forEach(id => {
+    const el = document.getElementById('ubic-' + id);
+    if (el) el.classList.add('selected');
+  });
+}
+
+// ── MODE ──────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('modeRun').classList.toggle('active',  m === 'run');
+  document.getElementById('modeStep').classList.toggle('active', m === 'step');
+  document.getElementById('btnStep').disabled = m === 'run';
+  document.getElementById('btnRun').disabled  = false;
+}
+
+// ── RUN FULL ──────────────────────────────────────────────────
+async function runFull() {
+  const params = getParams();
+  maxIterations = params.max_iter;
+  showLoading(true); resetDisplay();
+  log('Enviando a /sensores/run...', 'log-gen');
+  try {
+    const data = await apiFetch('/sensores/run', params);
+    showLoading(false);
+    fitnessHistory = data.fitness_history;
+
+    // Render last 5 gens
+    data.generations.slice(-5).reverse().forEach(g => renderGenPanel(g));
+
+    const last = data.generations[data.generations.length - 1];
+    document.getElementById('statGen').textContent      = data.total_gens;
+    document.getElementById('statBest').textContent     = data.best_solution.cobertura_total;
+    document.getElementById('statSensores').textContent = data.best_solution.num_sensores;
+    document.getElementById('statAvg').textContent      = last.avg_fit.toFixed(1);
+    document.getElementById('progressFill').style.width = '100%';
+
+    renderChart();
+    showSolution(data.best_solution);
+    log(`✦ Completado. Cobertura total: ${data.best_solution.cobertura_total} / ${data.cobertura_maxima_posible}`, 'log-best');
+  } catch(e) {
+    showLoading(false);
+    log('Error: ' + e.message, 'log-err');
+  }
+}
+
+// ── STEP MODE ─────────────────────────────────────────────────
+async function initStep() {
+  resetDisplay();
+  stepState = { population: [], generation: 0, best_ever: null };
+  document.getElementById('btnRun').disabled  = true;
+  document.getElementById('btnStep').disabled = false;
+  log('Modo paso a paso iniciado.', 'log-gen');
+}
+
+async function doStep() {
+  if (!stepState) { await initStep(); return; }
+  const params = getParams();
+  maxIterations = params.max_iter;
+  document.getElementById('btnStep').disabled = true;
+
+  try {
+    const data = await apiFetch('/sensores/step', {
+      population: stepState.population,
+      generation: stepState.generation,
+      best_ever:  stepState.best_ever,
+      params,
+    });
+
+    stepState.population = data.new_population;
+    stepState.generation = data.generation + 1;
+    stepState.best_ever  = data.best_ever;
+
+    fitnessHistory.best.push(data.best_fit);
+    fitnessHistory.avg.push(data.avg_fit);
+
+    renderGenPanel({ generation: data.generation, individuals: data.individuals, total_fit: data.total_fit, avg_fit: data.avg_fit, best_fit: data.best_fit });
+    renderChart();
+
+    document.getElementById('statGen').textContent      = stepState.generation;
+    document.getElementById('statBest').textContent     = data.best_solution ? data.best_solution.cobertura_total : '—';
+    document.getElementById('statSensores').textContent = data.best_solution ? data.best_solution.num_sensores : '—';
+    document.getElementById('statAvg').textContent      = data.avg_fit.toFixed(1);
+    document.getElementById('progressFill').style.width = Math.min(100, (stepState.generation / maxIterations) * 100) + '%';
+
+    log(`Gen ${data.generation}: mejor=${data.best_fit}, avg=${data.avg_fit.toFixed(1)}`, 'log-gen');
+
+    if (data.done) {
+      showSolution(data.best_solution);
+      log('✦ Completado.', 'log-best');
+      document.getElementById('btnStep').disabled = true;
+      document.getElementById('btnRun').disabled  = false;
+      stepState = null;
+    } else {
+      document.getElementById('btnStep').disabled = false;
+    }
+  } catch(e) {
+    log('Error: ' + e.message, 'log-err');
+    document.getElementById('btnStep').disabled = false;
+  }
+}
+
+function handleRun()  { mode === 'step' ? initStep() : runFull(); }
+function handleStep() { doStep(); }
+
+// ── RENDER GEN PANEL ──────────────────────────────────────────
+function chromHtml(chrom) {
+  return chrom.map((g,i) => `<span class="gene ${g?'gene-1':'gene-0'}" title="UB-${i+1}">${g}</span>`).join('');
+}
+
+function renderGenPanel(g) {
+  const container = document.getElementById('generationsLog');
+  const div = document.createElement('div');
+  div.className = 'gen-panel';
+  const maxFit = g.best_fit;
+  const rows = g.individuals.map(ind => {
+    const names = ind.ubicaciones_seleccionadas.map(u => u.nombre).join(', ');
+    return `
+    <tr class="${ind.fitness === maxFit && ind.valido ? 'best-row':''}">
+      <td><div class="chromo">${chromHtml(ind.chromosome)}</div></td>
+      <td style="color:var(--accent);font-weight:700">${ind.cobertura_bruta}</td>
+      <td style="color:var(--orange)">${ind.num_sensores}</td>
+      <td style="color:${ind.penalizacion_aplicada > 0 ? 'var(--red)':'var(--muted)'}">-${ind.penalizacion_aplicada}</td>
+      <td style="color:var(--cyan);font-weight:700">${ind.fitness}</td>
+      <td>${ind.proporcionality.toFixed(3)}</td>
+      <td><span class="${ind.valido?'badge-valid':'badge-invalid'}">${ind.valido?'✓ válido':'✗ pen.'}</span></td>
+      <td><div class="ubicaciones-mini">${names}</div></td>
+    </tr>`;
+  }).join('');
+
+  div.innerHTML = `
+    <div class="gen-header">
+      <span class="gen-badge">GEN ${g.generation}</span>
+      <span class="gen-title">Σ fitness = ${g.total_fit} &nbsp;·&nbsp; Mejor = ${g.best_fit}</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Cromosoma</th><th>Cobertura</th><th># Sensores</th>
+        <th>Penaliz.</th><th>Fitness</th><th>Prop.</th><th>Estado</th><th>Ubicaciones</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  container.prepend(div);
+  while (container.children.length > 5) container.removeChild(container.lastChild);
+}
+
+// ── SOLUTION ──────────────────────────────────────────────────
+function showSolution(sol) {
+  if (!sol) return;
+  document.getElementById('solutionBox').classList.add('show');
+  document.getElementById('solSensors').innerHTML = sol.ubicaciones_seleccionadas.map(u => `
+    <div class="sol-sensor">
+      <div class="ss-id">UB-${String(u.id).padStart(2,'0')}</div>
+      <div class="ss-name">${u.nombre}</div>
+      <div class="ss-cob">${u.cobertura}</div>
+      <div class="ss-zona">${u.zona}</div>
+    </div>`).join('');
+  document.getElementById('solStats').innerHTML = `
+    <div class="sol-stat">Cobertura total: <span>${sol.cobertura_total}</span></div>
+    <div class="sol-stat">Sensores instalados: <span>${sol.num_sensores} / 4</span></div>
+    <div class="sol-stat">Fitness final: <span>${sol.fitness}</span></div>
+    <div class="sol-stat">Cromosoma: <span>${sol.display}</span></div>`;
+  // Highlight on map
+  const ids = sol.ubicaciones_seleccionadas.map(u => u.id);
+  highlightSolution(ids);
+}
+
+// ── CHART ─────────────────────────────────────────────────────
+function renderChart() {
+  const canvas = document.getElementById('fitnessChart');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 900, H = 180;
+  canvas.width = W; canvas.height = H;
+  const best = fitnessHistory.best, avg = fitnessHistory.avg;
+  if (best.length < 2) return;
+  ctx.clearRect(0, 0, W, H);
+  const maxVal = Math.max(...best, 36);
+  const minVal = Math.min(...best, 0);
+  const range  = maxVal - minVal || 1;
+  const pad = { t: 10, r: 20, b: 30, l: 40 };
+  const cW = W - pad.l - pad.r, cH = H - pad.t - pad.b;
+  const xS = i => pad.l + (i / (best.length - 1)) * cW;
+  const yS = v => pad.t + cH - ((v - minVal) / range) * cH;
+
+  ctx.strokeStyle = 'rgba(30,48,30,0.8)'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (i / 4) * cH;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cW, y); ctx.stroke();
+    ctx.fillStyle = '#5a7a5a'; ctx.font = '10px Space Mono';
+    ctx.fillText(Math.round(maxVal - (i / 4) * range), 2, y + 4);
+  }
+  ctx.strokeStyle = 'rgba(179,136,255,0.5)'; ctx.lineWidth = 1.5; ctx.setLineDash([4,4]);
+  ctx.beginPath(); avg.forEach((v,i) => i===0?ctx.moveTo(xS(i),yS(v)):ctx.lineTo(xS(i),yS(v))); ctx.stroke();
+  ctx.setLineDash([]);
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + cH);
+  grad.addColorStop(0, 'rgba(57,255,20,0.3)'); grad.addColorStop(1, 'rgba(57,255,20,0)');
+  ctx.fillStyle = grad; ctx.beginPath();
+  best.forEach((v,i) => i===0?ctx.moveTo(xS(i),yS(v)):ctx.lineTo(xS(i),yS(v)));
+  ctx.lineTo(xS(best.length-1), pad.t+cH); ctx.lineTo(pad.l, pad.t+cH); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#39ff14'; ctx.lineWidth = 2; ctx.beginPath();
+  best.forEach((v,i) => i===0?ctx.moveTo(xS(i),yS(v)):ctx.lineTo(xS(i),yS(v))); ctx.stroke();
+  ctx.fillStyle = '#5a7a5a'; ctx.font = '9px Space Mono';
+  const step = Math.ceil(best.length / 6);
+  best.forEach((_,i) => { if (i%step===0||i===best.length-1) ctx.fillText(i, xS(i)-4, H-6); });
+  ctx.fillStyle='#39ff14'; ctx.fillRect(W-140,14,14,3);
+  ctx.fillStyle='#e0f0e0'; ctx.font='10px Space Mono'; ctx.fillText('Mejor',W-120,18);
+  ctx.fillStyle='rgba(179,136,255,0.7)'; ctx.fillRect(W-60,14,14,3);
+  ctx.fillStyle='#e0f0e0'; ctx.fillText('Avg',W-40,18);
+}
+
+// ── LOG ───────────────────────────────────────────────────────
+function log(msg, cls='log-line') {
+  const area = document.getElementById('logArea');
+  const line = document.createElement('div');
+  line.className = cls; line.textContent = msg;
+  area.appendChild(line); area.scrollTop = area.scrollHeight;
+}
+
+// ── UTILS ─────────────────────────────────────────────────────
+function showLoading(v) { document.getElementById('loadingOverlay').classList.toggle('show', v); }
+
+function resetDisplay() {
+  fitnessHistory = { best: [], avg: [] };
+  document.getElementById('generationsLog').innerHTML = '';
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('solutionBox').classList.remove('show');
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('statGen').textContent = '0';
+  document.getElementById('statBest').textContent = '—';
+  document.getElementById('statSensores').textContent = '—';
+  document.getElementById('statAvg').textContent = '—';
+  document.querySelectorAll('.ubic-card').forEach(c => c.classList.remove('selected'));
+  renderChart();
+}
+
+function resetAll() {
+  stepState = null;
+  document.getElementById('btnRun').disabled  = false;
+  document.getElementById('btnStep').disabled = mode !== 'step';
+  resetDisplay();
+  log('Reiniciado.', 'log-line');
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+renderChart();
+window.addEventListener('resize', renderChart);
+setMode('run');
+log('Listo. Conecta al backend (puerto 8001) y presiona Ejecutar AG.', 'log-line');
+</script>
+</body>
+</html>
